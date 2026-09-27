@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fraud Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Fraud Command Center</h1>
+      <p><span id="liveDot" class="live-dot" aria-hidden="true"></span><span id="liveText">Connecting…</span>
+        <span class="topchip" id="policyChip" title="Who approves restrictive actions">Policy: …</span>
+        <span class="topchip" id="llmChip" title="Who writes the agents' arguments">AI: …</span></p>
+    </div>
+    <div class="demo-ctl" aria-label="Demo feed controls">
+      <label class="sr" for="scenarioPick">Scenario</label>
+      <select id="scenarioPick" class="btn"><option value="demo_3am">The 3 AM analyst (fixed demo)</option></select>
+      <button class="btn primary" id="runDemo" title="Replay a scenario as a live transaction feed">Start feed</button>
+      <button class="btn" id="replay" title="Play the last recorded case without the backend pipeline">Replay last case</button>
+    </div>
+    <button class="bell" id="bell" aria-label="Alerts"><span aria-hidden="true">🔔</span><b id="bellCount" hidden>0</b></button>
+  </header>
+
+  <div class="shell">
+    <nav class="side" aria-label="Main">
+      <a href="/dashboard" data-link data-nav="dashboard">Dashboard</a>
+      <a href="/investigations" data-link data-nav="investigations">Investigations <b class="badge" id="navInv" hidden></b></a>
+      <a href="/countermeasures" data-link data-nav="countermeasures">Countermeasures <b class="badge warn" id="navCm" hidden></b></a>
+      <a href="/moot" data-link data-nav="moot">Moot court</a>
+      <div class="side-foot">The system investigates on its own.<br>You decide what happens to customers.</div>
+    </nav>
+
+    <main class="content">
+      <!-- ================= Dashboard (live command center) ================= -->
+      <section id="page-dashboard" class="page">
+        <div class="kpis dash-kpis">
+          <div class="kpi"><span>Transactions monitored</span><strong id="kTxns">—</strong><small id="kTxnsSub">in the graph</small></div>
+          <div class="kpi"><span>Suspicious transactions</span><strong id="kSusp">0</strong><small id="kSuspSub">this session</small></div>
+          <div class="kpi"><span>Active investigations</span><strong id="kActive">0</strong><small id="kActiveSub">running or awaiting you</small></div>
+          <div class="kpi"><span>Suspicious networks</span><strong id="kNets">0</strong><small>rings with proposed or taken action</small></div>
+          <div class="kpi"><span>Amount at risk</span><strong id="kRisk">₹0</strong><small id="kRiskSub">in open investigations</small></div>
+        </div>
+        <div class="dash-grid">
+          <section class="panel feedpanel">
+            <header><h2>Live transaction feed</h2><span class="sub" id="feedSub">Waiting for transactions</span></header>
+            <div class="tablewrap">
+              <table class="txns" aria-live="off">
+                <thead><tr><th>Time</th><th>From</th><th>To</th><th class="num">Amount</th><th>Risk</th><th>Status</th></tr></thead>
+                <tbody id="txnBody"><tr><td colspan="6" class="sub">Choose a scenario and press “Start feed”.</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+          <div class="dash-side">
+            <section class="panel">
+              <header><h2>Active investigations</h2><a href="/investigations" data-link class="sub">All</a></header>
+              <div id="activeList" class="inv-list"><p class="sub pad">No investigations yet.</p></div>
+            </section>
+            <section class="panel">
+              <header><h2>Recent alerts</h2></header>
+              <ul id="alertList" class="alert-list"><li class="sub">No alerts yet.</li></ul>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= Investigations list ================= -->
+      <section id="page-investigations" class="page" hidden>
+        <div class="page-head"><h2>Investigations</h2>
+          <div class="seg" role="group" aria-label="Filter by status" id="invFilter">
+            <button data-f="all" aria-pressed="true">All</button><button data-f="open" aria-pressed="false">Open</button>
+            <button data-f="awaiting" aria-pressed="false">Awaiting approval</button><button data-f="closed" aria-pressed="false">Closed</button>
+          </div></div>
+        <section class="panel">
+          <table class="txns inv-table"><thead><tr><th>Investigation</th><th>Opened</th><th>Trigger</th><th>Status</th>
+            <th class="num">Network risk</th><th class="num">Accounts</th><th class="num">At risk</th><th>Decision</th></tr></thead>
+            <tbody id="invBody"><tr><td colspan="8" class="sub">No investigations yet.</td></tr></tbody></table>
+        </section>
+      </section>
+
+      <!-- ================= Investigation (hero) ================= -->
+      <section id="page-investigation" class="page" hidden>
+        <div class="inv-head">
+          <div>
+            <a href="/investigations" data-link class="back">← Investigations</a>
+            <h2 id="ivTitle">Investigation</h2>
+            <p class="sub" id="ivSub"></p>
+          </div>
+          <div class="inv-metrics">
+            <div class="metric2"><span>Network risk</span><strong id="ivRisk">—</strong></div>
+            <div class="metric2"><span>Amount at risk</span><strong id="ivCapital">—</strong></div>
+            <div class="metric2" id="ivTimerBox"><span id="ivTimerLabel">Time to recommendation</span><strong id="ivTimer">0.0 s</strong><small>vs 72 h manual</small></div>
+            <span id="ivStatus" class="status-chip">—</span>
+            <a class="btn primary" id="ivGoCm" href="/countermeasures" data-link hidden>Review countermeasures</a>
+          </div>
+        </div>
+        <div class="rail" id="rail" aria-label="Investigation stages">
+          <div class="stage" data-stage="alert"><b>1</b>Alert</div><span class="sep"></span>
+          <div class="stage" data-stage="scout"><b>2</b>Graph scout</div><span class="sep"></span>
+          <div class="stage" data-stage="pattern"><b>3</b>Pattern</div><span class="sep"></span>
+          <div class="stage" data-stage="prosecution"><b>4</b>Prosecution</div><span class="sep"></span>
+          <div class="stage" data-stage="defense"><b>5</b>Defense</div><span class="sep"></span>
+          <div class="stage" data-stage="verdict"><b>6</b>Verdict</div><span class="sep"></span>
+          <div class="stage" data-stage="action"><b>7</b>Action</div>
+          <div class="ticker" id="ivTicker"></div>
+        </div>
+        <div class="inv-grid">
+          <section class="panel graphpanel">
+            <header><h2>Fraud network</h2><span class="sub" id="graphSub">Building…</span></header>
+            <div class="gtools">
+              <div class="seg"><button id="gZoomIn" aria-label="Zoom in">+</button><button id="gZoomOut" aria-label="Zoom out">−</button><button id="gFit">Fit</button></div>
+              <div class="seg" id="gRoles" role="group" aria-label="Filter by role">
+                <button data-role="origin" aria-pressed="true"><i class="dot origin"></i>Origin</button>
+                <button data-role="intermediary" aria-pressed="true"><i class="dot intermediary"></i>Intermediary</button>
+                <button data-role="cashout" aria-pressed="true"><i class="dot cashout"></i>Cash-out</button>
+                <button data-role="normal" aria-pressed="true"><i class="dot normal"></i>Normal</button>
+              </div>
+              <label class="risk-filter">Min risk <input type="range" id="gRisk" min="0" max="90" step="10" value="0"><output id="gRiskOut">0%</output></label>
+              <label class="tog"><input type="checkbox" id="gAttrs" checked> Devices/IPs</label>
+              <button class="btn small" id="gClear">Clear highlight</button>
+            </div>
+            <div class="graph-wrap" id="graphWrap"><div class="empty"><strong>Building the network…</strong>The Graph Scout is tracing the money.</div></div>
+            <div class="legend">
+              <span><i class="dot origin"></i>Origin candidate</span>
+              <span><i class="dot intermediary"></i>Intermediary / mule candidate</span>
+              <span><i class="dot cashout"></i>Cash-out candidate</span>
+              <span><i class="dot normal"></i>Normal / unclassified</span>
+              <span class="lg-ring"><i class="ring r4"></i>Hard freeze</span><span class="lg-ring"><i class="ring r3"></i>Soft freeze / hold</span>
+              <span class="lg-ring"><i class="ring r2"></i>Step-up / defended</span>
+              <span class="lg-ring"><i class="ring r3 dashed"></i>dashed + “?” = proposed, awaiting approval</span>
+              <span class="lg-note">Roles are candidates based on money-flow evidence, not findings of guilt. Scroll to zoom, drag to pan.</span>
+            </div>
+          </section>
+
+          <aside class="panel aipanel">
+            <header><h2>🤖 AI Investigator</h2><span class="sub" id="aiSub">Autonomous investigation</span></header>
+            <div class="aibody">
+              <h3 class="minor">Investigation progress</h3>
+              <ul class="checks" id="aiChecks"></ul>
+              <div class="assess" id="aiAssess"><span>Network assessment</span><strong>ASSESSING…</strong></div>
+              <h3 class="minor">Evidence found</h3>
+              <ul class="bullets" id="aiEvidence"><li class="sub">Collecting…</li></ul>
+              <details class="court-box" open><summary>Courtroom — prosecution, defense, judge</summary><div class="feed" id="feed"></div></details>
+              <details class="agent-box" id="agentBox"><summary>Agent activity <b id="agentCount">0</b></summary><ol class="tools" id="toolList"></ol></details>
+            </div>
+          </aside>
+        </div>
+        <div class="inv-bottom">
+          <section class="panel">
+            <header><h2>Network evidence</h2><span class="sub">Computed by code · click to highlight on the graph</span></header>
+            <ol class="evlist" id="evList"><li class="sub">No evidence yet.</li></ol>
+          </section>
+          <section class="panel">
+            <header><h2 id="selTitle">Selected account</h2><span class="sub" id="selSub">Click a node or a transfer on the graph</span></header>
+            <div id="selBody" class="selbody"><p class="sub">Nothing selected.</p></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ================= Countermeasures ================= -->
+      <section id="page-countermeasures" class="page" hidden>
+        <div class="page-head"><h2>Countermeasures</h2><span class="sub">The AI recommends; you approve or reject. Actions are simulated against a mock bank.</span></div>
+        <div class="cm-grid">
+          <section class="panel"><header><h2>Queue</h2></header><div id="cmQueue" class="inv-list"><p class="sub pad">Nothing to review.</p></div></section>
+          <section class="panel" id="cmDetail"><div class="empty"><strong>No recommendation selected</strong>Recommendations appear here when an investigation finishes.</div></section>
+        </div>
+      </section>
+
+<!-- ================= Moot court ================= -->
+  <section id="page-moot" class="page" hidden>
+    <div class="moot">
+      <div class="kpis">
+        <div class="kpi"><span>Rounds completed</span><strong id="kRounds">0</strong><small id="kCases">no cases yet</small></div>
+        <div class="kpi"><span>Missed rings (benchmark)</span><strong id="kMissed">—</strong><small id="kMissedBase">per 100 cases</small></div>
+        <div class="kpi"><span>Wrongful freezes (benchmark)</span><strong id="kWrong">—</strong><small id="kWrongBase">per 100 cases</small></div>
+        <div class="kpi"><span>Precedents stored</span><strong id="kPrec">0</strong><small id="kWindow">money-trail window</small></div>
+      </div>
+
+      <section class="panel">
+        <header><h2>Mistakes per 100 cases on a fixed benchmark</h2><span class="sub">Same 30 cases every round, never learned from</span></header>
+        <svg id="mootChart" viewBox="0 0 640 300" role="img" aria-label="Mistakes per round"></svg>
+        <div class="legend">
+          <span><i style="border-color:var(--red);background:var(--red)"></i>Missed rings</span>
+          <span><i style="border-color:var(--teal);background:var(--teal)"></i>Wrongful freezes</span>
+          <span><i style="border-color:var(--line-2);border-style:dashed"></i>Red-team win rate (%)</span>
+        </div>
+        <div class="moot-actions">
+          <button class="btn primary" id="mootRun">Run 8 rounds</button>
+          <button class="btn" id="mootReset">Start over from scratch</button>
+          <a class="btn" href="/api/reports/portfolio/moot" target="_blank" rel="noopener">Training report</a>
+          <span class="progress" id="mootProgress" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <section class="panel difficulty">
+        <header style="padding:12px 0 8px"><h2>What the red team is trying now</h2></header>
+        <dl id="difficulty"><dt>Run the moot court to see the red team's current tricks.</dt><dd></dd></dl>
+      </section>
+
+      <section class="panel log">
+        <header style="padding-bottom:8px"><h2>Precedent log</h2><span class="sub">Every mistake becomes a lesson the courtroom retrieves later</span></header>
+        <table>
+          <thead><tr><th>Round</th><th>Case type</th><th>What fooled the court</th><th>Stored as</th><th>Status</th></tr></thead>
+          <tbody id="logBody"><tr><td colspan="5" class="sub">No precedents yet</td></tr></tbody>
+        </table>
+      </section>
+    </div>
+  </section>
+    </main>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite" aria-label="Alerts"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

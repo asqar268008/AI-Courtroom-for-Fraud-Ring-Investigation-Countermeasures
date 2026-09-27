@@ -1,0 +1,18 @@
+{
+ "t0": 1789594500.0,
+ "live_start": 1789594500.0,
+ "seed": "A",
+ "ground_truth": {
+  "A": true,
+  "B1": true,
+  "B2": true,
+  "B3": true,
+  "C1": true,
+  "C2": true,
+  "C3": false,
+  "C4": true,
+  "C5": true,
+  "C6": true
+ },
+ "description": "Scam proceeds from 4 victims laundered through A, 3 layering and 6 mule accounts."
+}
