@@ -18,6 +18,30 @@ def route_after_judge(state: dict) -> str:
     return "review"
 
 
+def build_judge_rubric(confidence: float, node_verdicts: list[NodeVerdict], upheld: list[str]) -> str:
+    t4 = [nv.node_id for nv in node_verdicts if nv.tier == 4]
+    t3 = [nv.node_id for nv in node_verdicts if nv.tier == 3]
+    t2 = [nv.node_id for nv in node_verdicts if nv.tier == 2]
+
+    s1 = f"The Court finds substantial and verified evidence establishing an organized laundering syndicate with {confidence:.0%} judicial confidence."
+    if upheld:
+        s2 = f"The Prosecution's indictment is sustained for coordinated layering nodes, while the Defense's exculpatory proofs are upheld for verified account(s) ({', '.join(upheld)}) to prevent collateral commercial harm."
+    else:
+        s2 = "The Prosecution's forensic money trail demonstrates deliberate evasion and velocity that overcomes the Defense's objections."
+
+    orders = []
+    if t4:
+        orders.append(f"Tier 4 hard freezes and STR filings are ordered for core extraction nodes ({', '.join(t4)})")
+    if t3:
+        orders.append(f"Tier 3 outbound holds are placed on pass-through intermediaries ({', '.join(t3)})")
+    if t2:
+        orders.append(f"defended accounts ({', '.join(t2)}) are remanded to Tier 2 step-up verification")
+
+    order_str = "; ".join(orders) if orders else "enhanced monitoring is instituted"
+    s3 = f"Final Order: {order_str}."
+    return f"{s1} {s2} {s3}"
+
+
 async def judge(state: dict) -> dict:
     ctx = ctx_for(state)
     await ctx.pause()
@@ -69,7 +93,7 @@ async def judge(state: dict) -> dict:
 
     all_cited = list(set(pros.cited_evidence + defn.cited_evidence))
     confidence = 0.95 if is_innocent_cluster else (0.92 if not defn.objections else (0.88 if len(upheld) <= 1 else 0.75))
-    template = f"Court verdict reached with confidence {confidence:.2f}. Actions: {', '.join([f'{nv.node_id}: Tier {nv.tier}' for nv in node_verdicts])}."
+    template = build_judge_rubric(confidence, node_verdicts, upheld)
 
     facts = {
         "verdict": [nv.model_dump() for nv in node_verdicts],

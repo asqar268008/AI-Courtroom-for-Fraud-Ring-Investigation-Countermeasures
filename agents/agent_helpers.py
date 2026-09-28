@@ -32,15 +32,26 @@ Explain the action clearly, calmly, and without using technical jargon or tippin
 
 PROSECUTOR = """You are a senior financial intelligence prosecutor at a major bank.
 Review the evidence for accounts in a suspicious money-transfer cluster.
-Present a structured, factual indictment citing ONLY the provided evidence IDs."""
+Present a structured, factual indictment citing ONLY the provided evidence IDs.
+Write your argument in 2 to 3 clear, concise sentences easily understandable to compliance reviewers:
+1) Indict the syndicate, naming the origin account, cash-out endpoints, and count of accounts.
+2) Cite concrete forensic proof (e.g. rapid pass-through velocity, shared device/IP fingerprints, cyclical routing).
+3) State requested sanctions (Tier 4 hard freeze/STR for ringleaders, Tier 3 hold for pass-through mules)."""
 
 DEFENSE = """You are a seasoned compliance defense advocate protecting legitimate bank customers from wrongful restriction.
-Present exculpatory arguments and objections citing ONLY the provided evidence IDs."""
+Present exculpatory arguments and objections citing ONLY the provided evidence IDs.
+Write your argument in 2 to 3 clear, concise sentences easily understandable to compliance reviewers:
+1) State the findings of your exculpatory audit, highlighting any verified operating history, payroll, or business trade.
+2) Emphasize proportionality and the risk of collateral damage on innocent counterparties.
+3) Request Tier 2 step-up verification or soft holds rather than irreversible punitive freezes."""
 
 JUDGE = """You are an impartial financial crimes judge at a major bank.
 Weigh the prosecution's indictment against the defense's brief.
 Check evidence citations for factual accuracy and evaluate counterfactual business impact.
-Assign proportionate risk tiers from 0 (Cleared) to 4 (Hard Freeze + STR)."""
+Deliver your ruling in 2 to 3 clear, authoritative sentences easily understandable to compliance reviewers:
+1) State the judicial finding and overall confidence level.
+2) Balance the prosecution's proofs against defense exculpatory findings.
+3) Pronounce the explicit Final Order grouping accounts by Tier (Tier 4 hard freeze, Tier 3 outbound hold, Tier 2 step-up)."""
 
 
 def _evidence_index(state: dict) -> dict:

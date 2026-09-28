@@ -23,6 +23,21 @@ def established(f: dict) -> bool:
     )
 
 
+def build_defense_rubric(ring: list[str], positions: dict) -> str:
+    innocent = [k for k, v in positions.items() if v == "innocent"]
+    if innocent:
+        innocent_str = ", ".join(innocent)
+        s1 = f"The Defense conducted an exculpatory audit across all {len(ring)} accounts and identified legitimate commercial activity for {innocent_str} ({len(innocent)} account(s) demonstrating established operating history and verified counterparties)."
+        s2 = "Imposing punitive Tier 4 blocking on these accounts would cause severe collateral damage to innocent commercial operations."
+        s3 = f"We move to dismiss all punitive freezes against defended accounts ({innocent_str}), restricting any intervention to Tier 2 step-up verification."
+        return f"{s1} {s2} {s3}"
+    else:
+        s1 = f"The Defense scrutinized all {len(ring)} flagged accounts for benign explanations, distinguishing unwitting pass-through counterparties from culpable ring coordinators."
+        s2 = "While intermediary accounts exhibit rapid fund transmission, the state has not demonstrated that account holders acted with criminal intent rather than being compromised or coerced mules."
+        s3 = "We request the Court mandate Tier 2 step-up authentication or temporary Tier 3 soft holds rather than irreversible Tier 4 hard freezes, allowing legitimate customers due process to verify transactions."
+        return f"{s1} {s2} {s3}"
+
+
 async def defense(state: dict) -> dict:
     ctx = ctx_for(state)
     await ctx.pause()
@@ -52,11 +67,12 @@ async def defense(state: dict) -> dict:
     for ev in exculpatory_ev:
         await ctx.emit("evidence.added", ev.model_dump())
 
+
     facts = {
         "ring": ring, "positions": positions,
         "exculpatory_evidence": [e.model_dump() for e in exculpatory_ev],
     }
-    template = f"Defense brief defending legitimate accounts ({', '.join([k for k,v in positions.items() if v=='innocent']) or 'none'})."
+    template = build_defense_rubric(ring, positions)
     summary, _, fallback = await _llm_text(ctx, DEFENSE, facts, template, _masker(state), Brief)
 
     brief = Brief(
