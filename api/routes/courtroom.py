@@ -103,6 +103,7 @@ async def review_case(case_id: str, body: ReviewIn):
             "payload": {
                 "case_id": case_id, "actions": actions, "status": "approved",
                 "note": body.note, "declined": declined,
+                "duration_s": d.get("duration_s"),
             },
         })
         rt.finals.pop(case_id, None)
@@ -116,7 +117,7 @@ async def review_case(case_id: str, body: ReviewIn):
 
         await rt.bus.publish({
             "case_id": case_id, "type": "case.closed", "t": time.time(),
-            "payload": {"case_id": case_id, "actions": [], "status": "dismissed", "note": body.note},
+            "payload": {"case_id": case_id, "actions": [], "status": "dismissed", "note": body.note, "duration_s": d.get("duration_s")},
         })
         rt.finals.pop(case_id, None)
         return {"status": "dismissed", "actions": [], "declined": declined, "case_id": case_id}

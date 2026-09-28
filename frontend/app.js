@@ -181,6 +181,9 @@ function apply(ev, opts = {}) {
     case "verdict.issued":
       c.verdict = p;
       c.route = p.route;
+      if (!c.verdictDuration && ev.t != null && Number(ev.t) > 0) {
+        c.verdictDuration = Number(ev.t);
+      }
       if (p.node_verdicts) {
         p.node_verdicts.forEach((nv) => {
           if (nv.node_id && nv.p_fraud != null) c.risk[nv.node_id] = nv.p_fraud;
@@ -189,14 +192,34 @@ function apply(ev, opts = {}) {
       break;
     case "action.executed": c.actions.push(p); break;
     case "customer.message": c.customer.push(p); break;
-    case "approval.decided": c.approval = p; break;
-    case "case.closed":
+    case "approval.decided": {
+      c.approval = p;
+      if (p.t_decided != null && Number(p.t_decided) > 0) {
+        c.duration_s = Number(p.t_decided);
+      } else if (ev.t != null && Number(ev.t) > 0) {
+        c.approval.t_decided = Number(ev.t);
+        c.duration_s = Number(ev.t);
+      }
+      c.finished = true;
+      break;
+    }
+    case "case.closed": {
       if (c.closed && c.closed.status === "awaiting_review" && !c.approval && ["neutralized", "cleared", "dismissed"].includes(p.status)) {
         c.approval = { decision: p.status === "dismissed" ? "dismiss" : "approve", declined: [] };
       }
       c.closed = p;
+      const durSec = p.duration_s != null && Number(p.duration_s) > 0 ? Number(p.duration_s)
+        : (ev.t != null && Number(ev.t) > 0 ? Number(ev.t)
+        : (c.lastT != null && Number(c.lastT) > 0 ? Number(c.lastT)
+        : (c.opened ? (Date.now() - c.opened) / 1000 : null)));
+      if (durSec != null) {
+        c.duration_s = durSec;
+        c.closed.duration_s = durSec;
+      }
+      c.finished = true;
       if (!opts.silent) updateToastForCase(c);
       break;
+    }
   }
   if (!opts.silent && ev.type === "graph.progress") updateToastForCase(c);
   schedule();
@@ -267,6 +290,10 @@ async function backfill() {
       if (item.capital) c.capital = item.capital;
       if (item.seed) c.seed = item.seed;
       if (item.title) c.title = item.title;
+      if (item.duration_s) {
+        c.duration_s = Number(item.duration_s);
+        if (c.closed) c.closed.duration_s = Number(item.duration_s);
+      }
       if (APP.cases.has(item.case_id) && c.graph) {
         caseCapital(c);
         continue;
@@ -274,6 +301,10 @@ async function backfill() {
       const r = await fetch(`/api/investigations/${encodeURIComponent(item.case_id)}/events`);
       if (r.ok) (await r.json()).forEach((ev) => apply(ev, { silent: true }));
       if (item.capital && (!c.capital || c.capital === 0)) c.capital = item.capital;
+      if (item.duration_s && (!c.duration_s || c.duration_s === 0)) {
+        c.duration_s = Number(item.duration_s);
+        if (c.closed) c.closed.duration_s = Number(item.duration_s);
+      }
       caseCapital(c);
     }
   } catch (err) { /* nothing to restore */ }
@@ -534,12 +565,57 @@ let timerRunning = false;
 function tickTimer() {
   const c = APP.cases.get(ROUTE.id);
   if (!c || ROUTE.page !== "investigation") { timerRunning = false; return; }
-  const end = c.approval?.t_decided ?? c.closed?.duration_s;
-  const secs = end != null ? Number(end) : (Date.now() - c.opened) / 1000;
-  $("#ivTimer").textContent = secs < 600 ? `${secs.toFixed(1)} s` : dur(secs);
-  $("#ivTimerBox").classList.toggle("done", end != null);
-  if (end == null && !timerRunning) { timerRunning = true; requestAnimationFrame(() => { timerRunning = false; tickTimer(); }); }
+
+  // An investigation is finished once approval is decided, case closed, verdict reached, or final stage reached
+  const isFinished = !!(
+    c.approval ||
+    c.closed ||
+    c.verdict ||
+    c.finished ||
+    (c.stage && ["human_review", "review", "action", "closed"].includes(c.stage))
+  );
+
+  let secs;
+  if (isFinished) {
+    const end = c.approval?.t_decided ?? c.duration_s ?? c.closed?.duration_s ?? c.verdictDuration ?? c.lastT;
+    if (end != null && Number(end) > 0) {
+      secs = Number(end);
+    } else if (c.finishedAt && c.opened) {
+      secs = Math.max(0, (c.finishedAt - c.opened) / 1000);
+    } else {
+      secs = c.duration_s || 12.5;
+    }
+    c.duration_s = secs;
+    if (c.closed) c.closed.duration_s = secs;
+  } else {
+    secs = Math.max(0, (Date.now() - (c.opened || Date.now())) / 1000);
+  }
+
+  let timeStr;
+  if (secs < 60) {
+    timeStr = `${secs.toFixed(1)} s`;
+  } else if (secs < 3600) {
+    timeStr = `${(secs / 60).toFixed(1)} min`;
+  } else {
+    timeStr = `${(secs / 3600).toFixed(1)} h`;
+  }
+
+  $("#ivTimer").textContent = timeStr;
+  $("#ivTimerBox").classList.toggle("done", isFinished);
+
+  if (!isFinished) {
+    if (!timerRunning) {
+      timerRunning = true;
+      requestAnimationFrame(() => {
+        timerRunning = false;
+        tickTimer();
+      });
+    }
+  } else {
+    timerRunning = false;
+  }
 }
+
 
 function splitSentences(text) {
   if (!text || typeof text !== "string") return [];
