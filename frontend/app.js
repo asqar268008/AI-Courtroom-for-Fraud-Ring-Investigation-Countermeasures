@@ -290,7 +290,24 @@ function renderDashboard(feedOnly) {
       <td class="mono">${esc(t.clock)}</td><td class="mono">${esc(t.src)}</td><td class="mono">${esc(t.dst)}</td>
       <td class="num mono">${esc(t.amount_label || inr(t.amount))}</td><td>${riskCell(t.risk)}</td><td><span class="txs ${esc(t.status)}">${esc(st)}</span></td></tr>`;
   }).join("");
-  $("#txnBody").innerHTML = rows || `<tr><td colspan="6" class="sub">Choose a scenario and press “Start feed”.</td></tr>`;
+  if (rows) {
+    $("#txnBody").innerHTML = rows;
+  } else if (!$("#txnBody .feed-empty-cell")) {
+    $("#txnBody").innerHTML = `<tr><td colspan="6" class="feed-empty-cell">
+      <div class="feed-empty">
+        <svg class="feed-empty-icon" width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden="true">
+          <rect x="2" y="11" width="38" height="5" rx="2.5" fill="currentColor" opacity="0.13"/>
+          <rect x="2" y="20" width="30" height="5" rx="2.5" fill="currentColor" opacity="0.09"/>
+          <rect x="2" y="29" width="22" height="5" rx="2.5" fill="currentColor" opacity="0.06"/>
+          <circle cx="34" cy="30" r="9" stroke="currentColor" stroke-width="2.2" opacity="0.35"/>
+          <path d="M34 27v3.5l2.2 2.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.45"/>
+        </svg>
+        <strong class="feed-empty-title">No live transactions</strong>
+        <p class="feed-empty-desc">Select a scenario and press <b>Start feed</b> to stream real-time transactions into the fraud detection pipeline.</p>
+        <button class="btn primary feed-empty-cta" id="runDemoEmpty">&#9654; Start feed</button>
+      </div>
+    </td></tr>`;
+  }
   const cases = [...APP.cases.values()].sort((a, b) => b.opened - a.opened);
   const open = cases.filter(isOpen);
   $("#kTxns").textContent = (APP.graphTxns || 0).toLocaleString("en-IN");
@@ -834,19 +851,40 @@ $("#cmDetail").addEventListener("change", (e) => {
 $("#cmQueue").addEventListener("click", (e) => { const a = e.target.closest("[data-cm]"); if (a) APP.cmSelected = a.dataset.cm; });
 
 /* ============================== Controls ============================== */
-$("#runDemo").addEventListener("click", async () => {
-  $("#runDemo").disabled = true;
+
+/* ---- Feed configuration drawer ---- */
+function openFeedConfig() {
+  const cfg = $("#feedConfig");
+  if (cfg) { cfg.hidden = false; cfg.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+}
+function closeFeedConfig() {
+  const cfg = $("#feedConfig");
+  if (cfg) cfg.hidden = true;
+}
+
+async function startFeed() {
+  const btn = $("#runDemo");
+  if (btn) btn.disabled = true;
   try {
     const kind = $("#scenarioPick").value || "demo_3am";
     const r = await fetch(`/api/demo/run?scenario=${encodeURIComponent(kind)}`, { method: "POST" });
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
     APP.status = { ...(APP.status || {}), demo_running: true }; renderLive();
+    closeFeedConfig();
     if (ROUTE.page !== "dashboard") navigate("/dashboard");
-  } catch (err) { $("#feedSub").textContent = `Could not start the feed: ${err.message}`; }
-  setTimeout(() => { $("#runDemo").disabled = false; }, 1500);
+  } catch (err) {
+    const sub = $("#feedSub"); if (sub) sub.textContent = `Could not start: ${err.message}`;
+  }
+  setTimeout(() => { const b = $("#runDemo"); if (b) b.disabled = false; }, 1500);
   setTimeout(loadStatus, 2000);
-});
-/* Offline backup: play the last recorded case into the store as its own investigation. */
+}
+
+$("#runDemoTopbar").addEventListener("click", openFeedConfig);
+$("#runDemo").addEventListener("click", startFeed);
+$("#cancelFeedConfig").addEventListener("click", closeFeedConfig);
+document.addEventListener("click", (e) => {
+  if (e.target.id === "runDemoEmpty") openFeedConfig();
+});/* Offline backup: play the last recorded case into the store as its own investigation. */
 $("#replay").addEventListener("click", async () => {
   try {
     const r = await fetch("/api/recordings/latest");
@@ -932,15 +970,24 @@ function drawLog(log) {
 
 async function startMoot(reset) {
   $("#mootRun").disabled = $("#mootReset").disabled = true;
-  $("#mootProgress").textContent = "Starting…";
-  const r = await fetch(`/api/moot/run?rounds=8&cases=20${reset ? "&reset=true" : ""}`, { method: "POST" });
-  if (!r.ok) {
-    $("#mootProgress").textContent = (await r.json()).detail;
+  $("#mootProgress").textContent = "Starting\u2026";
+  try {
+    const r = await fetch(`/api/moot/run?rounds=8&cases=20${reset ? "&reset=true" : ""}`, { method: "POST" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: r.statusText }));
+      $("#mootProgress").textContent = `\u26a0 ${err.detail || r.statusText}`;
+      $("#mootRun").disabled = $("#mootReset").disabled = false;
+    }
+    // success: buttons re-enabled when moot.done fires via WebSocket
+  } catch (err) {
+    $("#mootProgress").textContent = `\u26a0 Could not reach server: ${err.message}`;
     $("#mootRun").disabled = $("#mootReset").disabled = false;
   }
 }
 function mootFinished(p) {
-  $("#mootProgress").textContent = `Finished ${p.rounds} rounds in ${p.elapsed_s} s`;
+  const secs = Number(p.elapsed_s) || 0;
+  const timeStr = secs < 60 ? `${secs.toFixed(1)} s` : `${(secs / 60).toFixed(1)} min`;
+  $("#mootProgress").textContent = `\u2713 Finished ${p.rounds ?? ""} rounds in ${timeStr}`;
   $("#mootRun").disabled = $("#mootReset").disabled = false;
   loadMetrics();
 }
