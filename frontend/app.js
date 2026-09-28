@@ -851,40 +851,38 @@ $("#cmDetail").addEventListener("change", (e) => {
 $("#cmQueue").addEventListener("click", (e) => { const a = e.target.closest("[data-cm]"); if (a) APP.cmSelected = a.dataset.cm; });
 
 /* ============================== Controls ============================== */
-
-/* ---- Feed configuration drawer ---- */
-function openFeedConfig() {
-  const cfg = $("#feedConfig");
-  if (cfg) { cfg.hidden = false; cfg.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
-}
-function closeFeedConfig() {
-  const cfg = $("#feedConfig");
-  if (cfg) cfg.hidden = true;
-}
-
 async function startFeed() {
   const btn = $("#runDemo");
   if (btn) btn.disabled = true;
   try {
-    const kind = $("#scenarioPick").value || "demo_3am";
-    const r = await fetch(`/api/demo/run?scenario=${encodeURIComponent(kind)}`, { method: "POST" });
+    const pick = $("#scenarioPick");
+    const kind = pick ? pick.value : "demo_3am";
+    const r = await fetch(`/api/demo/run?scenario=${encodeURIComponent(kind || "demo_3am")}`, { method: "POST" });
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
-    APP.status = { ...(APP.status || {}), demo_running: true }; renderLive();
-    closeFeedConfig();
+    APP.status = { ...(APP.status || {}), demo_running: true };
+    renderLive();
     if (ROUTE.page !== "dashboard") navigate("/dashboard");
   } catch (err) {
-    const sub = $("#feedSub"); if (sub) sub.textContent = `Could not start: ${err.message}`;
+    const sub = $("#feedSub");
+    if (sub) sub.textContent = `Could not start the feed: ${err.message}`;
   }
-  setTimeout(() => { const b = $("#runDemo"); if (b) b.disabled = false; }, 1500);
+  setTimeout(() => {
+    const b = $("#runDemo");
+    if (b) b.disabled = false;
+  }, 1500);
   setTimeout(loadStatus, 2000);
 }
 
-$("#runDemoTopbar").addEventListener("click", openFeedConfig);
-$("#runDemo").addEventListener("click", startFeed);
-$("#cancelFeedConfig").addEventListener("click", closeFeedConfig);
+const runDemoBtn = $("#runDemo");
+if (runDemoBtn) runDemoBtn.addEventListener("click", startFeed);
+
 document.addEventListener("click", (e) => {
-  if (e.target.id === "runDemoEmpty") openFeedConfig();
-});/* Offline backup: play the last recorded case into the store as its own investigation. */
+  if (e.target && e.target.id === "runDemoEmpty") {
+    startFeed();
+  }
+});
+
+/* Offline backup: play the last recorded case into the store as its own investigation. */
 $("#replay").addEventListener("click", async () => {
   try {
     const r = await fetch("/api/recordings/latest");

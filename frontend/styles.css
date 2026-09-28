@@ -250,7 +250,25 @@ button { font: inherit; }
 .topchip.on { color: #E6EAF1; border-color: #7f8ea8; }
 .demo-ctl { display: flex; gap: 8px; justify-self: end; align-items: center; }
 .demo-ctl select { max-width: 240px; font-size: 13px; }
-.topbar select.btn { background: #2A2722; color: var(--paper); border-color: #5E594F; }
+.topbar select.btn { background: #2A2722; color: #FBFAF6; border-color: #5E594F; }
+.topbar select.btn option,
+.topbar select.btn optgroup {
+  background-color: #2A2722;
+  color: #FBFAF6;
+}
+.topbar select.btn optgroup {
+  font-weight: 600;
+  color: #EBCB7A;
+}
+
+/* feed empty state */
+.feed-empty-cell { padding: 0 !important; border: none !important; }
+.feed-empty { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 48px 24px 54px; text-align: center; color: var(--muted); }
+.feed-empty-icon { color: var(--ink-2); margin-bottom: 4px; }
+.feed-empty-title { display: block; font: 600 17px var(--serif); color: var(--ink); }
+.feed-empty-desc { margin: 0; font-size: 13.5px; max-width: 380px; line-height: 1.55; }
+.feed-empty-cta { margin-top: 6px; }
 .bell { position: relative; background: transparent; border: 1px solid #5E594F; border-radius: var(--radius); color: var(--paper); width: 38px; height: 36px; cursor: pointer; }
 .bell b { position: absolute; top: -6px; right: -6px; background: var(--red-2); color: #fff; font: 600 11px var(--mono); border-radius: 999px; padding: 1px 6px; }
 
