@@ -84,6 +84,11 @@ async def defense(state: dict) -> dict:
         llm_fallback=fallback,
     )
     await ctx.emit("brief.filed", brief.model_dump())
+    await ctx.emit("agent.message", {
+        "agent": "defense", "stage": "defense",
+        "text": summary, "source": _source(ctx, fallback),
+        "evidence_ids": cited_ids,
+    })
     return {"defense": brief, "evidence": exculpatory_ev}
 
 

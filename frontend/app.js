@@ -163,6 +163,19 @@ function apply(ev, opts = {}) {
     case "agent.started": c.typing[p.agent] = ""; break;
     case "agent.token": c.typing[p.agent] = (c.typing[p.agent] || "") + p.text; break;
     case "agent.message": c.msgs[p.agent] = { text: p.text, source: p.source, t: ev.t }; delete c.typing[p.agent]; break;
+    case "brief.filed": {
+      const agentKey = p.side === "defense" ? "defense" : "prosecutor";
+      if (p.summary) {
+        c.msgs[agentKey] = {
+          text: p.summary,
+          source: p.llm_fallback ? "deterministic-rubric" : (p.source || "LLM"),
+          t: ev.t,
+        };
+      }
+      delete c.typing[agentKey];
+      if (p.cited_evidence?.length) c.cites[agentKey] = p.cited_evidence;
+      break;
+    }
     case "agent.brief": c.cites[p.agent] = p.cited_evidence || []; break;
     case "agent.tool": c.tools.push({ ...p, t: ev.t }); break;
     case "verdict.issued":
@@ -528,6 +541,13 @@ function tickTimer() {
   if (end == null && !timerRunning) { timerRunning = true; requestAnimationFrame(() => { timerRunning = false; tickTimer(); }); }
 }
 
+function splitSentences(text) {
+  if (!text || typeof text !== "string") return [];
+  const raw = text.trim();
+  const parts = raw.split(/(?<=[.!?])\s+(?=[A-Z])/).map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : [raw];
+}
+
 function formatAgentText(c, agent, raw) {
   if (!raw || typeof raw !== "string") return raw || "";
 
@@ -665,7 +685,9 @@ function renderAI(c) {
     const src = m?.source && m.source !== "code" ? `<span class="src ${m.source.startsWith("LLM") ? "llm" : ""}">${esc(m.source)}</span>` : "";
     const cites = (c.cites[a === "prosecutor" ? "prosecutor" : a] || []).map((id) => `<button data-ev="${esc(id)}">${esc(id)}</button>`).join("");
     const formattedText = formatAgentText(c, a, m ? m.text : c.typing[a]);
-    return `<article class="card ${a}${m ? "" : " typing"}"><h3>${esc(AGENTS[a] || a)}${src}</h3><p>${esc(formattedText)}</p>${cites ? `<div class="cites">${cites}</div>` : ""}</article>`;
+    const sentences = splitSentences(formattedText);
+    const bodyHtml = sentences.map((s) => `<p class="arg-line">${esc(s)}</p>`).join("");
+    return `<article class="card ${a}${m ? "" : " typing"}"><h3>${esc(AGENTS[a] || a)}${src}</h3><div class="arg-body">${bodyHtml}</div>${cites ? `<div class="cites">${cites}</div>` : ""}</article>`;
   }).join("") || `<p class="sub">The agents' arguments appear here.</p>`;
   $("#agentCount").textContent = c.tools.length;
   $("#toolList").innerHTML = c.tools.map((t) => `<li><span class="mono clk">${esc(t.clock)}</span>
@@ -992,7 +1014,7 @@ function cmDetail(c) {
       <span>Amount at risk</span><b>${esc(inrShort(caseCapital(c)))}</b><span>Still in the network</span><b>${esc(inrShort(stillInNetwork(c)))}</b></div>
     <p class="sub"><a href="/investigations/${esc(c.id)}" data-link>Open the investigation graph →</a></p>`;
   if (!groups.length) return head + `<div class="empty"><strong>No restrictive action recommended</strong>No ring was proven; all ${monitored} accounts stay fully active.</div><div id="cmReports" class="report-links"></div></div>`;
-  const reason = `<h3 class="minor">Reason</h3><p class="reason">${esc(formatAgentText(c, "judge", v.summary))}</p>`;
+  const reason = `<h3 class="minor">Reason</h3><p class="reason">${esc(v.summary)}</p>`;
   if (decide) {
     const actions = groups.map((g) => `<li class="act"><label><input type="checkbox" data-tier="${g.t}" ${off.has(g.t) ? "" : "checked"}>
       <b>${label[g.t]}</b> <span class="sub">— ${g.accs.length} account${g.accs.length > 1 ? "s" : ""}: ${reasonDetail[g.t]}</span></label>

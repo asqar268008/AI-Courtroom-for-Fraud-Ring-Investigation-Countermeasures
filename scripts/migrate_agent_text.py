@@ -222,6 +222,28 @@ def run_migration():
                             p["summary"] = new_s
                             changed = True
 
+            has_def_msg = any(ev.get("type") == "agent.message" and ev.get("payload", {}).get("agent") == "defense" for ev in events)
+            if not has_def_msg:
+                for idx, ev in enumerate(list(events)):
+                    if ev.get("type") == "brief.filed" and ev.get("payload", {}).get("side") == "defense":
+                        bp = ev.get("payload", {})
+                        summary = bp.get("summary", "")
+                        msg_ev = {
+                            "case_id": ev.get("case_id"),
+                            "type": "agent.message",
+                            "t": ev.get("t", 0.0) + 0.05,
+                            "payload": {
+                                "agent": "defense",
+                                "stage": "defense",
+                                "text": summary,
+                                "source": "deterministic-rubric" if bp.get("llm_fallback") else "LLM",
+                                "evidence_ids": bp.get("cited_evidence", []),
+                            }
+                        }
+                        events.insert(idx + 1, msg_ev)
+                        changed = True
+                        break
+
             if changed:
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump(events, f, indent=2)
