@@ -1,4 +1,4 @@
-﻿"""Prosecutor Agent: argues the state's case for fraud based on strictly cited evidence."""
+"""Prosecutor Agent: argues the state's case for fraud based on strictly cited evidence."""
 from __future__ import annotations
 
 import re
