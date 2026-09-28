@@ -109,16 +109,26 @@ async def run_case(
     CONTEXTS[case_id] = ctx
     try:
         app = get_app(mode)
+        inflows = store.in_txns(seed, alert_time - 3600, alert_time + 3600)
+        outflows = store.out_txns(seed, alert_time - 3600, alert_time + 3600)
+        capital = sum(t["amount"] for t in inflows) or sum(t["amount"] for t in outflows) or 0.0
         initial = {
             "case_id": case_id,
             "mode": mode,
             "seed": seed,
             "alert_time": alert_time,
             "alert_reason": reason,
+            "capital_at_risk": capital,
             "evidence": [],
             "actions": [],
         }
-        await ctx.emit("case.opened", {"case_id": case_id, "seed": seed, "alert_time": alert_time, "reason": reason})
+        await ctx.emit("case.opened", {
+            "case_id": case_id,
+            "seed": seed,
+            "alert_time": alert_time,
+            "reason": reason,
+            "capital": capital,
+        })
         if settle and ctx.settings.settle_window > 0:
             await asyncio.sleep(ctx.settings.settle_window)
         config = {"configurable": {"thread_id": case_id}, "recursion_limit": 30}

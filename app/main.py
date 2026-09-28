@@ -45,6 +45,7 @@ app.include_router(countermeasures_router, prefix="/api")
 app.include_router(countermeasures_router)  # also direct /bank/*
 app.include_router(reports_router, prefix="/api")
 app.include_router(moot_court_router, prefix="/api")
+app.include_router(moot_court_router)
 
 
 @app.get("/api/status")

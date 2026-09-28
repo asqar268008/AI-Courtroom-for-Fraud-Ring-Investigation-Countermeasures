@@ -78,6 +78,7 @@ async def _run_demo(speed: float, scenario_name: str, seed: Optional[int] = None
         sc = None
     if sc:
         rt.load_scenario(sc)
+    rt.stats = {"monitored": 0, "suspicious": 0, "held": 0}
     await rt.bus.publish({"case_id": None, "type": "demo.loaded", "t": 0, "payload": {
         "meta": rt.meta, "txns_count": len(rt.live_txns)}})
     if not rt.live_txns:

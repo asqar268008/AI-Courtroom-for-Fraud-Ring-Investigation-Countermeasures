@@ -134,10 +134,11 @@ def list_dossiers(limit: int = 50) -> list[dict]:
     for p in sorted(CASES_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
         d = json.loads(p.read_text(encoding="utf-8"))
         v = d.get("verdict") or {}
+        capital = (d.get("alert") or {}).get("capital", 0.0) or d.get("capital_at_risk", 0.0) or d.get("funds_held", 0.0)
         out.append({"case_id": d["case_id"], "status": d["status"], "title": d["scenario"].get("title", ""),
-                    "kind": d["scenario"].get("kind", ""), "seed": d["alert"]["seed"],
-                    "confidence": v.get("confidence"), "frozen": sum(1 for n in v.get("node_verdicts", []) if n["tier"] >= 3),
-                    "accounts": len(d["ring"]), "generated_at": d["generated_at"]})
+                    "kind": d["scenario"].get("kind", ""), "seed": d["alert"]["seed"], "capital": capital,
+                    "confidence": v.get("confidence"), "frozen": sum(1 for n in v.get("node_verdicts", []) if n.get("tier", 0) >= 3),
+                    "accounts": len(d.get("ring", [])), "generated_at": d["generated_at"]})
     return out
 
 

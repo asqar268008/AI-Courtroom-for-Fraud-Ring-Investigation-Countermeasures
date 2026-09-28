@@ -62,6 +62,7 @@ class Runtime:
         self.live_txns = sorted((t for t in full.txns.values() if t["ts"] >= live_start), key=lambda t: t["ts"])
         self.trigger.reset()
         self.watch.clear()
+        self.bank.reset()
 
     def load_scenario(self, sc: dict) -> None:
         self.meta = sc["meta"]
@@ -72,6 +73,7 @@ class Runtime:
         self.live_txns = sorted((t for t in full.txns.values() if t["ts"] >= live_start), key=lambda t: t["ts"])
         self.trigger.reset()
         self.watch.clear()
+        self.bank.reset()
 
 
 rt = Runtime()

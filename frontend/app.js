@@ -64,16 +64,25 @@ const needsDecision = (c) => ["awaiting", "review"].includes(caseStatus(c));
 const isOpen = (c) => ["investigating", "awaiting", "review"].includes(caseStatus(c));
 
 function caseCapital(c) {
+  if (!c) return 0;
   if (c.capital && c.capital > 0) return c.capital;
-  if (c.trigger?.amount) return c.trigger.amount;
-  if (c.trigger?.txn?.amount) return c.trigger.txn.amount;
+  if (c.trigger?.amount) { c.capital = c.trigger.amount; return c.capital; }
+  if (c.trigger?.txn?.amount) { c.capital = c.trigger.txn.amount; return c.capital; }
+  const seedNode = (c.graph?.nodes || []).find((n) => n.id === c.seed && n.stats);
+  if (seedNode && (seedNode.stats.received || seedNode.stats.forwarded)) {
+    const amt = Math.max(seedNode.stats.received || 0, seedNode.stats.forwarded || 0);
+    if (amt > 0) { c.capital = amt; return amt; }
+  }
   const nodes = (c.graph?.nodes || []).filter((n) => n.group === "ring" && n.stats);
   const total = nodes.reduce((s, n) => s + (n.stats.received || 0), 0);
-  if (total > 0) return total;
-  const edges = (c.graph?.edges || []).filter((e) => e.kind === "ring");
+  if (total > 0) { c.capital = total; return total; }
+  const edges = (c.graph?.edges || []).filter((e) => e.kind === "ring" || e.kind === "cycle");
   const edgeTotal = edges.reduce((s, e) => s + (e.amount || 0), 0);
-  if (edgeTotal > 0) return edgeTotal;
-  return 4000000;
+  if (edgeTotal > 0) { c.capital = edgeTotal; return edgeTotal; }
+  const al = APP.alerts.find((a) => a.seed === c.seed || a.caseId === c.id);
+  if (al?.txn?.amount) { c.capital = al.txn.amount; return al.txn.amount; }
+  c.capital = 4000000;
+  return c.capital;
 }
 
 function networkRisk(c) {
@@ -129,15 +138,24 @@ function apply(ev, opts = {}) {
   c.lastT = ev.t || c.lastT;
   switch (ev.type) {
     case "case.opened": {
-      Object.assign(c, { seed: p.seed, reason: p.reason, capital: p.capital, clock: p.alert_clock,
+      Object.assign(c, { seed: p.seed, reason: p.reason, capital: p.capital || c.capital || 0, clock: p.alert_clock,
         opened: Date.now() - (ev.t || 0) * 1000, title: APP.scenario?.title || "" });
       const al = APP.alerts.find((a) => a.seed === p.seed && !a.caseId);
       if (al) { al.caseId = c.id; c.trigger = c.trigger || al.txn; }
+      caseCapital(c);
+      if (APP.autoNavigate) {
+        APP.autoNavigate = false;
+        navigate(`/investigations/${encodeURIComponent(c.id)}`);
+      }
       break;
     }
     case "stage.changed": c.stage = p.stage; break;
     case "graph.progress": c.progress = { hop: p.hop, nodes: p.nodes }; break;
-    case "graph.snapshot": c.graph = p; c.progress.nodes = Math.max(c.progress.nodes, p.nodes.length); break;
+    case "graph.snapshot":
+      c.graph = p;
+      c.progress.nodes = Math.max(c.progress.nodes, p.nodes.length);
+      caseCapital(c);
+      break;
     case "graph.nodes_flagged": (p.nodes || []).forEach((n) => (c.nodeState[n] = p.state)); break;
     case "graph.edges_protected": (p.edges || []).forEach((e) => c.protectedEdges.add(e)); break;
     case "evidence.added": c.evidence[p.id] = p; break;
@@ -232,9 +250,18 @@ async function backfill() {
   try {
     const list = await (await fetch("/api/investigations")).json();
     for (const item of list.slice(0, 20).reverse()) {
-      if (APP.cases.has(item.case_id)) continue;
+      const c = getCase(item.case_id);
+      if (item.capital) c.capital = item.capital;
+      if (item.seed) c.seed = item.seed;
+      if (item.title) c.title = item.title;
+      if (APP.cases.has(item.case_id) && c.graph) {
+        caseCapital(c);
+        continue;
+      }
       const r = await fetch(`/api/investigations/${encodeURIComponent(item.case_id)}/events`);
       if (r.ok) (await r.json()).forEach((ev) => apply(ev, { silent: true }));
+      if (item.capital && (!c.capital || c.capital === 0)) c.capital = item.capital;
+      caseCapital(c);
     }
   } catch (err) { /* nothing to restore */ }
   schedule();
@@ -346,7 +373,15 @@ function renderDashboard(feedOnly) {
   $("#kActive").textContent = open.length;
   $("#kActiveSub").textContent = `${cases.filter(needsDecision).length} awaiting your decision`;
   $("#kNets").textContent = cases.filter((c) => (c.verdict?.node_verdicts || []).some((v) => v.tier >= 3)).length;
-  $("#kRisk").textContent = inrShort(open.reduce((s, c) => s + (c.capital || 0), 0));
+  const pool = open.length ? open : cases;
+  const totalRisk = pool.reduce((s, c) => s + (caseCapital(c) || 0), 0);
+  $("#kRisk").textContent = inrShort(totalRisk);
+  const kRiskSub = $("#kRiskSub");
+  if (kRiskSub) {
+    kRiskSub.textContent = open.length
+      ? `in ${open.length} active investigation${open.length > 1 ? "s" : ""}`
+      : (cases.length ? `across recent investigations` : `in open investigations`);
+  }
   if (feedOnly) return;
   $("#activeList").innerHTML = cases.slice(0, 6).map(invCard).join("") || `<p class="sub pad">No investigations yet.</p>`;
   $("#alertList").innerHTML = APP.alerts.slice(0, 8).map((a) => `<li><span class="sev ${a.risk >= 0.85 ? "hi" : "mid"}">${a.risk >= 0.85 ? "HIGH" : "MED"}</span>
@@ -360,7 +395,7 @@ function invCard(c) {
   return `<a class="inv-card" href="/investigations/${esc(c.id)}" data-link>
     <div class="ic-top"><b class="mono">${esc(c.id)}</b>${statusChip(c)}</div>
     <div class="ic-mid"><span>Seed <b class="mono">${esc(c.seed)}</b></span><span>Network risk <b>${pct(r)}</b></span>
-      <span>At risk <b>${esc(inrShort(c.capital))}</b></span></div>${building}</a>`;
+      <span>At risk <b>${esc(inrShort(caseCapital(c)))}</b></span></div>${building}</a>`;
 }
 
 /* ============================== 2. Toast notifications ============================== */
@@ -430,7 +465,7 @@ function renderInvestigations() {
     return `<tr data-case="${esc(c.id)}" class="clickable"><td class="mono"><b>${esc(c.id)}</b></td><td class="mono">${esc(c.clock)}</td>
       <td class="mono">${esc(c.trigger ? `${c.trigger.src} → ${c.trigger.dst} ${c.trigger.amount_label}` : c.seed)}</td><td>${statusChip(c)}</td>
       <td class="num">${riskCell(networkRisk(c))}</td><td class="num">${(c.graph?.nodes || []).filter((n) => n.group === "ring").length || c.progress.nodes || "—"}</td>
-      <td class="num mono">${esc(inrShort(c.capital))}</td><td>${esc(dec)}</td></tr>`;
+      <td class="num mono">${esc(inrShort(caseCapital(c)))}</td><td>${esc(dec)}</td></tr>`;
   }).join("") || `<tr><td colspan="8" class="sub">No investigations ${f === "all" ? "yet" : "match this filter"}.</td></tr>`;
 }
 
@@ -462,7 +497,7 @@ function renderInvestigation() {
   $("#ivSub").textContent = `Alert on ${c.seed} at ${c.clock} IST · ${c.reason}${c.title ? " · " + c.title : ""}`;
   const r = networkRisk(c);
   $("#ivRisk").innerHTML = r == null ? "—" : `<span class="${r >= 0.8 ? "hi" : r >= 0.6 ? "mid" : "lo"}">${pct(r)}</span>`;
-  $("#ivCapital").textContent = inrShort(c.capital);
+  $("#ivCapital").textContent = inrShort(caseCapital(c));
   const [label, cls] = STATUS[st] || [st, ""];
   $("#ivStatus").className = `status-chip ${cls}`; $("#ivStatus").textContent = label;
   $("#ivGoCm").hidden = !(c.verdict && (c.verdict.node_verdicts || []).some((v) => v.tier >= 2));
@@ -500,7 +535,7 @@ function renderAI(c) {
   const cashouts = ring.filter((n) => roleOf(c, n) === "cashout").length;
   const item = (ok, text) => `<li class="${ok ? "ok" : "wait"}"><span>${ok ? "✓" : "…"}</span> ${text}</li>`;
   $("#aiChecks").innerHTML = [
-    item(!!c.seed, `Seed transaction analysed${c.capital ? ` — ${esc(inrShort(c.capital))} arrived at <b class="mono">${esc(c.seed)}</b>` : ""}`),
+    item(!!c.seed, `Seed transaction analysed — ${esc(inrShort(caseCapital(c)))} arrived at <b class="mono">${esc(c.seed)}</b>`),
     item(!!g, g ? `${hops}-hop money trail traced` : `Tracing the money… hop ${Math.max(0, c.progress.hop)}`),
     item(!!g || c.progress.nodes > 0, `${g ? g.nodes.filter((n) => n.group !== "attr").length : c.progress.nodes} nodes discovered`),
     item(Object.keys(c.risk).length > 0, `${hiBranches} high-risk branch${hiBranches === 1 ? "" : "es"} identified`),
@@ -917,6 +952,7 @@ $("#cmQueue").addEventListener("click", (e) => { const a = e.target.closest("[da
 
 /* ============================== Controls ============================== */
 async function startFeed() {
+  APP.autoNavigate = true;
   const btn = $("#runDemo");
   if (btn) btn.disabled = true;
   try {
@@ -941,8 +977,17 @@ async function startFeed() {
 const runDemoBtn = $("#runDemo");
 if (runDemoBtn) runDemoBtn.addEventListener("click", startFeed);
 
+const scenarioPick = $("#scenarioPick");
+if (scenarioPick) {
+  scenarioPick.addEventListener("change", () => {
+    APP.autoNavigate = true;
+    startFeed();
+  });
+}
+
 document.addEventListener("click", (e) => {
   if (e.target && e.target.id === "runDemoEmpty") {
+    APP.autoNavigate = true;
     startFeed();
   }
 });
