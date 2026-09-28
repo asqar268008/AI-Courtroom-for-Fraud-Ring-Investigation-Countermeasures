@@ -138,8 +138,7 @@ def list_dossiers(limit: int = 50) -> list[dict]:
         out.append({"case_id": d["case_id"], "status": d["status"], "title": d["scenario"].get("title", ""),
                     "kind": d["scenario"].get("kind", ""), "seed": d["alert"]["seed"], "capital": capital,
                     "confidence": v.get("confidence"), "frozen": sum(1 for n in v.get("node_verdicts", []) if n.get("tier", 0) >= 3),
-                    "accounts": len(d.get("ring", [])), "generated_at": d["generated_at"],
-                    "duration_s": d.get("duration_s", 0.0)})
+                    "accounts": len(d.get("ring", [])), "generated_at": d["generated_at"]})
     return out
 
 

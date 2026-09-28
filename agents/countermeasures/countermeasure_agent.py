@@ -56,7 +56,6 @@ async def countermeasure(state: dict, approve_tiers: set[int] | None = None, exc
     await ctx.emit("case.closed", {
         "case_id": ctx.case_id, "status": "neutralized" if actions else "cleared",
         "actions": actions, "sar_path": sar_path,
-        "duration_s": ctx.elapsed(),
     })
     return {"actions": actions, "sar_path": sar_path}
 
@@ -73,7 +72,6 @@ async def human_review(state: dict) -> dict:
     await ctx.emit("case.closed", {
         "case_id": ctx.case_id, "status": status,
         "reason": reason, "verdict": verdict.model_dump(),
-        "duration_s": ctx.elapsed(),
     })
     return {"actions": []}
 

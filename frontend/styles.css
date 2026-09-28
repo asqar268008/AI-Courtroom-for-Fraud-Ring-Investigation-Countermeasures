@@ -139,9 +139,7 @@ button { font: inherit; }
 .card h3 { margin: 0 0 4px; font: 600 14.5px var(--serif); display: flex; justify-content: space-between; gap: 8px; }
 .card h3 small { font: 12px var(--mono); color: var(--muted); }
 .card p { margin: 0; font-size: 14px; }
-.card .arg-body { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; }
-.card .arg-line { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink); }
-.card.typing p::after, .card.typing .arg-line:last-child::after { content: "▍"; color: var(--muted); animation: blink 1s steps(1) infinite; }
+.card.typing p::after { content: "▍"; color: var(--muted); animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .card.alert { border-left-color: var(--ink); background: var(--paper-2); }
 .card.scout, .card.pattern { border-left-color: var(--line-2); }
